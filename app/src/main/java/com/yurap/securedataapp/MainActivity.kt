@@ -84,7 +84,8 @@ class MainActivity : ComponentActivity() {
     private fun requestAllRequiredPermissions() {
         val list = mutableListOf(
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
         if (Build.VERSION.SDK_INT >= 33) {
             list.add("android.permission.READ_MEDIA_IMAGES")
@@ -98,7 +99,8 @@ class MainActivity : ComponentActivity() {
     private fun checkAllGranted(results: Map<String, Boolean>): Boolean {
         val needed = mutableSetOf(
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
         if (Build.VERSION.SDK_INT >= 33) {
             needed.add("android.permission.READ_MEDIA_IMAGES")

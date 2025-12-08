@@ -4,6 +4,7 @@
 
 # Gradle caches
 .gradle/
+.gradle-*/
 
 # Android local configs
 local.properties
