@@ -119,6 +119,9 @@
                 <td>{{ r[10].split('T')[0] }} <small class="text-muted">{{ r[10].split('T')[1][:5] }}</small></td>
                 <td>
                     <a href="/device/{{ r[1] }}" class="btn btn-sm btn-primary">Details</a>
+                    {% if latest_contacts_map and latest_contacts_map.get(r[1]) %}
+                    <a href="/contacts/{{ latest_contacts_map.get(r[1]) }}" class="btn btn-sm btn-success ms-1">Contacts</a>
+                    {% endif %}
                     <form action="/device/{{ r[1] }}/delete" method="post" class="d-inline">
                         <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确认删除该设备及所有数据？此操作不可恢复');">Delete</button>
                     </form>

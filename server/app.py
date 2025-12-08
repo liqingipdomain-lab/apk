@@ -135,6 +135,7 @@ def dashboard():
 
     # Get recent contacts dumps
     contacts = c.execute('SELECT id, device_id, count, created_at FROM contacts_dump ORDER BY id DESC LIMIT 20').fetchall()
+    latest_contacts_map = dict(c.execute('SELECT device_id, MAX(id) FROM contacts_dump GROUP BY device_id').fetchall())
     conn.close()
 
     # Intelligent Suggestions Logic
@@ -156,7 +157,7 @@ def dashboard():
         'active_today': active_today
     }
 
-    return render_template('dashboard.html', stats=stats, suggestions=suggestions, devices=rows, uploads=uploads_data, contacts=contacts)
+    return render_template('dashboard.html', stats=stats, suggestions=suggestions, devices=rows, uploads=uploads_data, contacts=contacts, latest_contacts_map=latest_contacts_map)
 
 
 @app.route('/')

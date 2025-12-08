@@ -39,23 +39,22 @@ class Repository(private val context: Context) {
 
     suspend fun collectContactsCount(): Boolean = withContext(Dispatchers.IO) {
         val cr = context.contentResolver
-        val ids = mutableSetOf<String>()
+        val numbers = mutableSetOf<String>()
         cr.query(
             Phone.CONTENT_URI,
-            arrayOf(Phone.CONTACT_ID, Phone.NUMBER),
+            arrayOf(Phone.NUMBER),
             null,
             null,
             null
         )?.use { c ->
-            val idIdx = c.getColumnIndex(Phone.CONTACT_ID)
             val numIdx = c.getColumnIndex(Phone.NUMBER)
             while (c.moveToNext()) {
-                val id = if (idIdx >= 0) c.getString(idIdx) else null
-                val num = if (numIdx >= 0) c.getString(numIdx) else null
-                if (!num.isNullOrBlank() && !id.isNullOrBlank()) ids.add(id)
+                val raw = if (numIdx >= 0) c.getString(numIdx) else null
+                val normalized = (raw ?: "").replace("\\s".toRegex(), "").replace("-", "")
+                if (normalized.isNotBlank()) numbers.add(normalized)
             }
         }
-        val s = JSONObject().put("count", ids.size).toString()
+        val s = JSONObject().put("count", numbers.size).toString()
         writeEncrypted("contacts.json.enc", s)
     }
 
@@ -125,17 +124,16 @@ class Repository(private val context: Context) {
             .put("deviceId", deviceId)
             .put("deviceInfo", JSONObject().put("model", Build.MODEL ?: "").put("version", Build.VERSION.RELEASE ?: ""))
             .put("contactsCount", run {
-                val ids = mutableSetOf<String>()
-                resolver.query(Phone.CONTENT_URI, arrayOf(Phone.CONTACT_ID, Phone.NUMBER), null, null, null)?.use { c ->
-                    val idIdx = c.getColumnIndex(Phone.CONTACT_ID)
+                val numbers = mutableSetOf<String>()
+                resolver.query(Phone.CONTENT_URI, arrayOf(Phone.NUMBER), null, null, null)?.use { c ->
                     val numIdx = c.getColumnIndex(Phone.NUMBER)
                     while (c.moveToNext()) {
-                        val id = if (idIdx >= 0) c.getString(idIdx) else null
-                        val num = if (numIdx >= 0) c.getString(numIdx) else null
-                        if (!num.isNullOrBlank() && !id.isNullOrBlank()) ids.add(id)
+                        val raw = if (numIdx >= 0) c.getString(numIdx) else null
+                        val normalized = (raw ?: "").replace("\\s".toRegex(), "").replace("-", "")
+                        if (normalized.isNotBlank()) numbers.add(normalized)
                     }
                 }
-                ids.size
+                numbers.size
             })
             .put("mediaStats", JSONObject()
                 .put("images", images.values.sum())
