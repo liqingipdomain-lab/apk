@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Contact Dump #{{ dump_id }}</h1>
+    <a href="/device/{{ device_id }}" class="btn btn-outline-secondary">Back to Device</a>
+</div>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> Device: <strong>{{ device_id }}</strong> | Total: <strong>{{ count }}</strong> | Synced: {{ created_at }}
+</div>
+
+<div class="card">
+    <div class="card-header bg-white">
+        <input type="text" id="searchInput" class="form-control" placeholder="Search contacts...">
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="contactsTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone Numbers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td class="fw-bold">{{ item.name }}</td>
+                        <td>
+                            {% for p in item.phones %}
+                            <span class="badge bg-light text-dark border">{{ p }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+document.getElementById('searchInput').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let rows = document.querySelectorAll('#contactsTable tbody tr');
+    rows.forEach(row => {
+        let text = row.innerText.toLowerCase();
+        row.style.display = text.includes(filter) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}

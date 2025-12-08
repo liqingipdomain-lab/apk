@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Uploads Gallery</h1>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input type="text" id="fileSearch" class="form-control" placeholder="Filter files...">
+    </div>
+</div>
+
+<div class="row" id="gallery">
+    {% for u in uploads %}
+    <div class="col-md-2 col-sm-4 col-6 mb-4 file-item" data-name="{{ u[2].lower() }}">
+        <div class="card h-100 shadow-sm">
+            {% if u[2].endswith('.jpg') or u[2].endswith('.png') or u[2].endswith('.jpeg') %}
+            <div style="height: 120px; overflow: hidden;" class="bg-light d-flex align-items-center justify-content-center">
+                <img src="/uploads/{{ u[2] }}" alt="{{ u[2] }}" style="width: 100%; height: 100%; object-fit: cover;">
+            </div>
+            {% else %}
+            <div style="height: 120px;" class="bg-light d-flex align-items-center justify-content-center text-muted">
+                <i class="fas fa-file fa-3x"></i>
+            </div>
+            {% endif %}
+            <div class="card-body p-2">
+                <h6 class="card-title text-truncate mb-1" title="{{ u[2] }}">{{ u[2] }}</h6>
+                <small class="text-muted d-block mb-2">{{ u[4].split('T')[0] }}</small>
+                <div class="d-grid gap-1">
+                    <a href="/uploads/{{ u[2] }}" target="_blank" class="btn btn-xs btn-outline-primary py-0">View</a>
+                    <a href="/device/{{ u[1] }}" class="btn btn-xs btn-link text-decoration-none py-0 text-muted" style="font-size: 0.7em;">Dev: {{ u[1][:6] }}...</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% block extra_js %}
+<script>
+document.getElementById('fileSearch').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let items = document.querySelectorAll('.file-item');
+    items.forEach(item => {
+        let name = item.getAttribute('data-name');
+        item.style.display = name.includes(filter) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}

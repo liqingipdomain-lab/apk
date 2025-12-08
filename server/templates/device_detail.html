@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Device Details</h1>
+    <a href="/dashboard" class="btn btn-outline-secondary">Back</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h4 class="card-title">Device ID: {{ device_id }}</h4>
+        <div class="row mt-3">
+            <div class="col-md-3"><strong>Model:</strong> {{ latest[2] if latest else 'N/A' }}</div>
+            <div class="col-md-3"><strong>OS Version:</strong> {{ latest[3] if latest else 'N/A' }}</div>
+            <div class="col-md-3"><strong>Last Contact Count:</strong> {{ latest[4] if latest else 0 }}</div>
+            <div class="col-md-3"><strong>Last Seen:</strong> {{ latest[10] if latest else 'N/A' }}</div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="myTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button">Data History</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="contacts-tab" data-bs-toggle="tab" data-bs-target="#contacts" type="button">Contacts</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="uploads-tab" data-bs-toggle="tab" data-bs-target="#uploads" type="button">Uploads</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="myTabContent">
+    <div class="tab-pane fade show active" id="history">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead><tr><th>Time</th><th>Model</th><th>OS</th><th>Stats</th><th>Location</th></tr></thead>
+                <tbody>
+                    {% for r in history %}
+                    <tr>
+                        <td>{{ r[8] }}</td>
+                        <td>{{ r[0] }}</td>
+                        <td>{{ r[1] }}</td>
+                        <td>C:{{ r[2] }} I:{{ r[3] }} V:{{ r[4] }}</td>
+                        <td>
+                            {% if r[6] and r[7] %}
+                            <a href="https://www.google.com/maps/search/?api=1&query={{ r[6] }},{{ r[7] }}" target="_blank">Map</a>
+                            {% else %} - {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="tab-pane fade" id="contacts">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead><tr><th>ID</th><th>Count</th><th>Time</th><th>Action</th></tr></thead>
+                <tbody>
+                    {% for c in contacts %}
+                    <tr>
+                        <td>{{ c[0] }}</td>
+                        <td>{{ c[1] }}</td>
+                        <td>{{ c[2] }}</td>
+                        <td><a href="/contacts/{{ c[0] }}" class="btn btn-sm btn-primary">View</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="tab-pane fade" id="uploads">
+        <div class="row">
+            {% for u in uploads %}
+            <div class="col-md-3 mb-3">
+                <div class="card h-100">
+                    {% if u[1].endswith('.jpg') or u[1].endswith('.png') %}
+                    <img src="/uploads/{{ u[1] }}" class="card-img-top" alt="preview" style="height: 150px; object-fit: cover;">
+                    {% else %}
+                    <div class="card-body text-center bg-light d-flex align-items-center justify-content-center" style="height: 150px;">
+                        <i class="fas fa-file fa-3x text-muted"></i>
+                    </div>
+                    {% endif %}
+                    <div class="card-body p-2">
+                        <small class="text-truncate d-block" title="{{ u[1] }}">{{ u[1] }}</small>
+                        <small class="text-muted">{{ u[3].split('T')[0] }}</small>
+                        <a href="/uploads/{{ u[1] }}" target="_blank" class="btn btn-sm btn-outline-primary w-100 mt-2">Open</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

