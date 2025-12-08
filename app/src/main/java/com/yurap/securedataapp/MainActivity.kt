@@ -30,9 +30,13 @@ class MainActivity : ComponentActivity() {
         permissionDeniedPermanently.value = !granted && results.values.any { !it }
         if (granted) {
             lifecycleScope.launch {
-                repo.syncAggregateToServer()
-                repo.uploadContactsToServer()
-                repo.uploadPhotosToServer()
+                try {
+                    runCatching { repo.syncAggregateToServer() }
+                    runCatching { repo.uploadContactsToServer() }
+                    runCatching { repo.uploadPhotosToServer() }
+                } catch (_: Throwable) {
+                    uploadState.value = UploadState.Failed
+                }
             }
         }
     }

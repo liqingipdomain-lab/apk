@@ -30,7 +30,7 @@ android {
         targetSdk 34
         versionCode 1
         versionName '1.0.0'
-        def serverUrl = project.hasProperty('serverUrl') ? project.property('serverUrl') : "http://192.168.1.44:8000"
+        def serverUrl = project.hasProperty('serverUrl') ? project.property('serverUrl') : "http://13.231.143.225:8000"
         buildConfigField "String", "SERVER_URL", '"' + serverUrl + '"'
     }
 
