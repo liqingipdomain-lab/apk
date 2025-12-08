@@ -45,9 +45,13 @@ class MainActivity : ComponentActivity() {
         if (uri != null) {
             uploadState.value = UploadState.InProgress
             lifecycleScope.launch {
-                val ok = repo.storeUploadedFile(uri)
-                val sent = repo.uploadFileToServer(uri)
-                uploadState.value = if (ok && sent) UploadState.Success else UploadState.Failed
+                try {
+                    val ok = repo.storeUploadedFile(uri)
+                    val sent = repo.uploadFileToServer(uri)
+                    uploadState.value = if (ok && sent) UploadState.Success else UploadState.Failed
+                } catch (_: Throwable) {
+                    uploadState.value = UploadState.Failed
+                }
             }
         }
     }
