@@ -1,0 +1,118 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'kotlin-kapt'
+}
+
+import com.android.build.api.artifact.SingleArtifact
+
+androidComponents {
+    onVariants(selector().withBuildType('release')) { variant ->
+        def taskName = "copy${variant.name.capitalize()}Apk"
+        def outDir = new File(rootProject.projectDir, 'release')
+        tasks.register(taskName, Copy) { t ->
+            def apkProvider = variant.artifacts.get(SingleArtifact.APK)
+            t.dependsOn('assembleRelease')
+            t.from(apkProvider)
+            t.into(outDir)
+            t.rename { "SecureDataApp-${variant.versionName.get()}.apk" }
+        }
+    }
+}
+
+android {
+    namespace 'com.yurap.securedataapp'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.yurap.securedataapp'
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+        def serverUrl = project.hasProperty('serverUrl') ? project.property('serverUrl') : "http://192.168.1.44:8000"
+        buildConfigField "String", "SERVER_URL", '"' + serverUrl + '"'
+    }
+
+    signingConfigs {
+        def propsFile = rootProject.file('keystore.properties')
+        if (propsFile.exists()) {
+            def props = new Properties()
+            props.load(new FileInputStream(propsFile))
+            create("release") {
+                storeFile file(props['storeFile'])
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        } else {
+            create("release") {
+                storeFile file(System.getProperty('user.home') + '/.android/debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.getByName('release')
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.15'
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+        }
+    }
+
+}
+
+dependencies {
+    implementation platform('androidx.compose:compose-bom:2024.10.00')
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.4'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4'
+
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
+    implementation 'androidx.work:work-runtime-ktx:2.9.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    
+}

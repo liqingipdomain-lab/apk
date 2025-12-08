@@ -1,0 +1,26 @@
+# IDE
+.idea/
+*.iml
+
+# Gradle caches
+.gradle/
+
+# Android local configs
+local.properties
+keystore.properties
+
+# App build outputs
+app/build/
+app/release/
+*.apk
+
+# Python venv and bytecode
+server/.venv/
+server/__pycache__/
+
+# Backend runtime data
+server/uploads/
+server/data.db
+
+# Misc
+*.log

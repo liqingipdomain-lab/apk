@@ -1,0 +1,6 @@
+-keep class androidx.work.** { *; }
+-keep class kotlinx.coroutines.** { *; }
+-keep class com.google.android.gms.location.** { *; }
+-keep class com.yurap.securedataapp.** { *; }
+-dontwarn kotlinx.coroutines.**
+-dontwarn com.google.android.gms.**

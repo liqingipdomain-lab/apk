@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">SecureDataApp</string>
+    <string name="title">数据授权与上传</string>
+    <string name="upload">上传文件</string>
+    <string name="open_settings">前往设置授权</string>
+    <string name="permissions_required">需要授权全部权限后方可进入主界面</string>
+    <string name="granted">已授权</string>
+    <string name="denied">未授权</string>
+</resources>
