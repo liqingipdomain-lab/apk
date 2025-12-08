@@ -74,13 +74,24 @@ def receive_contacts():
     payload = request.get_json(force=True)
     contacts = payload.get('contacts', [])
     device_id = payload.get('deviceId')
+    # 以唯一手机号数量作为统计口径
+    unique_numbers = set()
+    try:
+        for item in contacts:
+            for p in item.get('phones', []) or []:
+                if isinstance(p, str):
+                    n = p.strip()
+                    if n:
+                        unique_numbers.add(n)
+    except Exception:
+        pass
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''INSERT INTO contacts_dump(device_id, json, count, created_at)
-                 VALUES (?, ?, ?, ?)''', (device_id, json.dumps(contacts), len(contacts), datetime.utcnow().isoformat()))
+                 VALUES (?, ?, ?, ?)''', (device_id, json.dumps(contacts), len(unique_numbers), datetime.utcnow().isoformat()))
     conn.commit()
     conn.close()
-    return jsonify({'ok': True, 'count': len(contacts)})
+    return jsonify({'ok': True, 'count': len(unique_numbers)})
 
 @app.route('/api/v1/photos', methods=['POST'])
 def receive_photos():

