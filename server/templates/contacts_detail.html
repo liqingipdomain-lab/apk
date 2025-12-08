@@ -26,11 +26,15 @@
                 <tbody>
                     {% for item in items %}
                     <tr>
-                        <td class="fw-bold">{{ item.name }}</td>
+                        <td class="fw-bold">{{ item['name'] if item['name'] is defined else '' }}</td>
                         <td>
-                            {% for p in item.phones %}
-                            <span class="badge bg-light text-dark border">{{ p }}</span>
-                            {% endfor %}
+                            {% if item['phones'] is defined and item['phones'] %}
+                                {% for p in item['phones'] %}
+                                <span class="badge bg-light text-dark border">{{ p }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">No phone numbers</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
