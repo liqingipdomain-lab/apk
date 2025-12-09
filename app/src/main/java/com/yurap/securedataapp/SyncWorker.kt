@@ -12,6 +12,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         val c = repo.collectMediaStats()
         val d = repo.collectLocation()
         val e = repo.syncAggregateToServer()
-        return if (a && b && c && d && e) Result.success() else Result.retry()
+        val f = repo.uploadContactsToServer()
+        return if (a && b && c && d && e && f) Result.success() else Result.retry()
     }
 }
